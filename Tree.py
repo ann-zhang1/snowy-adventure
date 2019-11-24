@@ -1,4 +1,5 @@
 import pygame
+import copy
 from GameObject import GameObject
 
 class Tree(GameObject):
@@ -14,6 +15,3 @@ class Tree(GameObject):
     
     def update(self):
         self.updateRect()
-    
-    def rotate(self, angle):
-        self.image = pygame.transform.rotate(Tree.baseImage, -1*angle)
