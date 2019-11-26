@@ -1,6 +1,6 @@
 import pygame
 import shelve
-import math
+import math, random
 from pygamegame import PygameGame
 from MainCharacter import MainCharacter
 from Map import Map
@@ -21,6 +21,8 @@ class Game(PygameGame):
         
         pygame.font.init()
 
+        self.trees = pygame.sprite.Group()
+
         self.mainCharacter = MainCharacter(-1, -1)
 
         left = self.width/10
@@ -30,24 +32,28 @@ class Game(PygameGame):
 
         # initialize all buttons
         self.mapCreationButtons = pygame.sprite.Group()
-        self.saveMapButton = Button(left, bottom, 'Save Map')
-        self.discardMapButton = Button(right, bottom, 'Discard Map')
-        self.newMapButton = Button(right, top, 'New Map')
+        self.saveMapButton = Button(left, top, 'Save Map')
+        self.discardMapButton = Button(right, top, 'Discard Map')
+        self.newMapButton = Button(right, bottom, 'New Map')
+        self.scrollButton = Button(left, bottom, '')
         self.mapCreationButtons.add(self.saveMapButton)
         self.mapCreationButtons.add(self.discardMapButton)
         self.mapCreationButtons.add(self.newMapButton)
+        self.mapCreationButtons.add(self.scrollButton)
 
         self.startScreenButtons = pygame.sprite.Group()
         self.saveGameButton = Button(right, bottom, 'Save Game')
-        self.startScreenButtons.add(self.saveGameButton)
         self.mapModeButton = Button(left, bottom, 'Maps')
+        self.startScreenButtons.add(self.saveGameButton)
         self.startScreenButtons.add(self.mapModeButton)
 
         self.mapListButtons = pygame.sprite.Group()
         self.createButton = Button(right, top, 'Create')
-        self.mapListButtons.add(self.createButton)
         self.homeButton = Button(left, top, 'Home')
+        self.mapListButtons.add(self.createButton)
         self.mapListButtons.add(self.homeButton)
+
+        self.scrolling = False
 
         self.loadGame()
         self.restartGame()
@@ -72,7 +78,8 @@ class Game(PygameGame):
 
         self.distance = 0
         self.score = 0
-        self.scrollX = 0
+        self.gameScroll = 0
+        self.mapScroll = 0
     
     # code based from 
     # https://inventwithpython.com/blog/2012/05/03/implement-a-save-game-feature-in-python-with-the-shelve-module/
@@ -121,6 +128,8 @@ class Game(PygameGame):
         elif self.gameMode:
             if keyCode == pygame.K_SPACE and not self.isPaused:
                 self.mainCharacter.isJumping = True
+                self.mainCharacter.jumpHeight = 0
+                self.jumpStage = 0
             elif keyCode == pygame.K_p:
                 self.isPaused = not self.isPaused
             elif keyCode == pygame.K_r:
@@ -155,6 +164,13 @@ class Game(PygameGame):
                 # start creating a map
                 # make a new Map object, and add to Game.maps
                 Game.maps.append(Map())
+                self.mapScroll = 0
+                for button in self.mapCreationButtons:
+                    if button.text == '':
+                        button.cx = self.width/10
+                        button.update()
+            elif self.scrollButton.clicked(x, y):
+                self.scrolling = True
 
         elif self.mapListMode:
             if self.createButton.clicked(x, y):
@@ -169,8 +185,11 @@ class Game(PygameGame):
                 for myMap in self.maps:
                     if myMap.name == self.currMap:
                         self.mainCharacter.cx, self.mainCharacter.cy = myMap.line[0]
-                        self.mainCharacter.cx -= self.mainCharacter.width/2
-                        self.mainCharacter.cy -= self.mainCharacter.height
+                        self.trees = pygame.sprite.Group()
+                        for i in range(len(myMap.line)):
+                            if random.randint(0, 50) % 50 == 0:
+                                x, y = myMap.line[i]
+                                self.trees.add(Tree(x, y))
 
         # if in game mode, hold the mouse to flip
         elif self.gameMode and not self.isPaused:
@@ -186,9 +205,15 @@ class Game(PygameGame):
 
     def mouseDrag(self, x, y):
         if self.mapCreationMode:
+            if self.scrolling:
+                for button in self.mapCreationButtons:
+                    if button.text == '':
+                        self.mapScroll += x - button.cx
+                        button.cx = x
+                        button.update()
             # start creating a map
-            if len(Game.maps) > 0:
-                Game.maps[-1].line.append((x, y))
+            elif len(Game.maps) > 0:
+                Game.maps[-1].line.append((x+self.mapScroll, y))
             # can also switch to drag to draw a longer terrain
 
         # if in game mode, hold the mouse to flip
@@ -196,10 +221,7 @@ class Game(PygameGame):
             pass
 
     def mouseReleased(self, x, y):
-        # finish updating map objects (do nothing?)
-
-        # is there anything to do in mouse released?
-        pass
+        self.scrolling = False
 
     def timerFired(self, dt):
         # adjust fps as necessary
@@ -215,23 +237,20 @@ class Game(PygameGame):
                     if myMap.name == self.currMap:
                         # find your current map
                         # move the player
+                        self.mainCharacter.cx += 1
+                        x1, y1, x2, y2 = self.findTwoPoints(myMap)
+                        self.mainCharacter.cy = y1 - self.mainCharacter.height
                         if self.mainCharacter.isJumping:
-                            # move in a jumping fashion
-                            pass
-                        else:
-                            x1, y1, x2, y2 = self.findTwoPoints(myMap)
-                            print(f'x1 {x1} y1 {y1} x2 {x2} y2 {y2}')
-                            self.mainCharacter.cy = y1 - self.mainCharacter.height
-                            if x2-x1 == 0: x2 += 1
-                            if y2-y1 == 0: y2 += 1
-                            slope = (y2-y1)/(x2-x1)
-                            slopeSign = slope/(abs(slope))
-                            angle = 90 - 180 / math.pi * math.atan(abs(x2-x1)/abs(y2-y1))
-                            rotateAngle = angle
-                            print(f'rotateAngle {rotateAngle}')
-                            self.mainCharacter.rotate(rotateAngle)
-                            self.mainCharacter.cx += 5
-                            self.scrollX += 5
+                            self.mainCharacter.jump()
+                            self.mainCharacter.cy += self.mainCharacter.jumpHeight
+                        if x2-x1 == 0: x2 += 1
+                        if y2-y1 == 0: y2 += 1
+                        slope = (y2-y1)/(x2-x1)
+                        slopeSign = slope/(abs(slope))
+                        angle = 180 / math.pi * math.atan(abs((x2-x1)/(y2-y1))) - 90
+                        rotateAngle = slopeSign * angle
+                        self.mainCharacter.rotate(rotateAngle)
+                        self.gameScroll += 1
             # adjust speed of player
 
             # check for player collisions with line
@@ -249,7 +268,6 @@ class Game(PygameGame):
                 closestPoint = point
                 closestIndex = i
         x1, y1 = closestPoint
-        print(len(myMap.line))
         if i + 1 < len(myMap.line):
             x2, y2 = myMap.line[i+1]
         else:
@@ -276,10 +294,17 @@ class Game(PygameGame):
         # otherwise, in game mode
         # draw game (foreground, background, terrain, weather, day)
         elif self.gameMode:
-            screen.blit(self.mainCharacter.image, (self.mainCharacter.cx-self.scrollX, self.mainCharacter.cy))
+            screen.fill((194,245,255))
+            self.trees.draw(screen)
+            screen.blit(self.mainCharacter.image, (self.mainCharacter.cx-self.gameScroll, self.mainCharacter.cy))
             for myMap in self.maps:
                 if myMap.name == self.currMap:
-                    myMap.draw(screen, self.scrollX)
+                    myMap.draw(screen, self.gameScroll, self)
+                    # if self.mainCharacter.cx > myMap.line[-1][0] - self.width:
+                    #    myMap.extend()
+            for tree in self.trees:
+                tree.fixX(self.gameScroll)
+                tree.update()
 
     def drawHelpScreen(self, screen):
         screen.fill((255,255,255))
@@ -298,11 +323,15 @@ class Game(PygameGame):
         self.mapCreationButtons.draw(screen)
         self.drawButtonText(self.mapCreationButtons, screen)
         if len(Game.maps) > 0:
-            Game.maps[-1].draw(screen)
+            Game.maps[-1].draw(screen, self.mapScroll, self)
+        if self.recordName:
+            myfont = pygame.font.Font('Seaside.ttf', 30)
+            line1 = myfont.render('Please enter a name for the map:', False, (48, 73, 12))
+            screen.blit(line1,(100, 150))
         if self.name != '':
             myfont = pygame.font.Font('Seaside.ttf', 30)
             line1 = myfont.render(self.name, False, (48, 73, 12))
-            screen.blit(line1,(100, 150))
+            screen.blit(line1,(100, 200))
 
     def drawStartScreen(self, screen):
         screen.fill((255,255,255))
@@ -319,7 +348,7 @@ class Game(PygameGame):
         for button in buttonList:
             myfont = pygame.font.Font('Antonio-Regular.ttf', 18)
             text = myfont.render(button.text, False, (0, 0, 0))
-            screen.blit(text, (button.cx-button.width/3, button.cy-button.height/3))
+            screen.blit(text, (button.cx-button.width/4, button.cy-button.height/4))
         
 
     # code based from 

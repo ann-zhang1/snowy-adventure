@@ -5,9 +5,9 @@ from GameObject import GameObject
 class Button(GameObject):
     @staticmethod
     def init():
-        image = pygame.image.load('button.png').convert_alpha()
+        image = pygame.image.load('greyButton.png').convert_alpha()
         width, height = image.get_size()
-        Button.baseImage = pygame.transform.scale(image, (int(width/20), int(height/20)))
+        Button.baseImage = pygame.transform.scale(image, (int(width/10), int(height/10)))
     
     def __init__(self, cx, cy, text):
         image = copy.copy(Button.baseImage)
