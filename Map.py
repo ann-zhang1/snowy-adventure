@@ -22,14 +22,15 @@ class Map(object):
         self.line += newLine
     '''
     
-    def draw(self, screen, scrollX, game):
+    def draw(self, screen, scrollX, game, terrain):
         for i in range(len(self.line)-1):
             x0, y0 = self.line[i]
             x1, y1 = self.line[i+1]
             x0 -= scrollX
             x1 -= scrollX
             distance = ((y0-y1)**2 + (x0-x1)**2)**0.5
-            pygame.draw.polygon(screen, (255, 255, 255), 
-                    [(x0, y0), (x1, y1), (x0, game.height), (x1, game.height)])
             if distance < 25:
+                if terrain:
+                    pygame.draw.polygon(screen, (255, 255, 255), 
+                        [(x0, y0), (x1, y1), (x1, game.height), (x0, game.height)])
                 pygame.draw.line(screen, (0,0,0), (x0, y0), (x1, y1))

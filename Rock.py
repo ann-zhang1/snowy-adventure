@@ -5,6 +5,7 @@ from GameObject import GameObject
 class Rock(GameObject):
     @staticmethod
     def init():
+        # image from myrealdomain.com
         image = pygame.image.load('tempRock.png').convert_alpha()
         width, height = image.get_size()
         Rock.baseImage = pygame.transform.scale(image, (int(width/20), int(height/20)))

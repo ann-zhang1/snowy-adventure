@@ -5,6 +5,7 @@ from GameObject import GameObject
 class Tree(GameObject):
     @staticmethod
     def init():
+        # image from www.jing.fm
         image = pygame.image.load('tempTree.png').convert_alpha()
         width, height = image.get_size()
         Tree.baseImage = pygame.transform.scale(image, (int(width/10), int(height/10)))

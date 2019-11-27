@@ -8,6 +8,9 @@ from Tree import Tree
 from Rock import Rock
 from Button import Button
 
+# all fonts from fontsquirrel.com
+# Seaside.ttf property of Nick's Fonts
+
 class Game(PygameGame):
     maps = []
     bestScore = 0
@@ -53,7 +56,8 @@ class Game(PygameGame):
         self.mapListButtons.add(self.createButton)
         self.mapListButtons.add(self.homeButton)
 
-        self.scrolling = False
+        self.mapListButtonX = self.width/3
+        self.mapListButtonY = self.height/4
 
         self.loadGame()
         self.restartGame()
@@ -67,14 +71,19 @@ class Game(PygameGame):
         self.helpScreenMode = False
         self.gameMode = False
 
+        self.scrolling = False
+        self.rotateAngle = 0
+
         self.recordName = False
         self.name = ''
+
+        self.isGameOver = False
 
         self.isPaused = False
         # later, currMap will be initialized to original map instead of None
         self.currMap = None
         # initialize main character to be in center
-        self.mainCharacter.cx, self.mainCharacter.cy = -1, -1
+        self.mainCharacter.reset()
 
         self.distance = 0
         self.score = 0
@@ -91,14 +100,22 @@ class Game(PygameGame):
         Game.bestDistance = shelfFile['bestDistance']
         shelfFile.close()
         for myMap in Game.maps:
-            self.mapListButtons.add(Button(self.width/2, self.height/2, myMap.name))
+            self.mapListButtons.add(Button(self.mapListButtonX, self.mapListButtonY, myMap.name))
+            self.mapListButtonX += self.width/3
+            if self.mapListButtonX >= self.width:
+                self.mapListButtonX = self.width/3
+                self.mapListButtonY += self.height/4
 
     def keyPressed(self, keyCode, modifier, event):
         if self.mapCreationMode:
             if self.recordName:
                 if keyCode == pygame.K_RETURN:
                     Game.maps[-1].name = self.name
-                    self.mapListButtons.add(Button(self.width/2, self.height/2, self.name))
+                    self.mapListButtons.add(Button(self.mapListButtonX, self.mapListButtonY, self.name))
+                    self.mapListButtonX += self.width/3
+                    if self.mapListButtonX >= self.width:
+                        self.mapListButtonX = self.width/3
+                        self.mapListButtonY += self.height/4
                     self.name = ''
                     self.mapCreationMode = False
                 elif keyCode == pygame.K_BACKSPACE:
@@ -193,7 +210,7 @@ class Game(PygameGame):
 
         # if in game mode, hold the mouse to flip
         elif self.gameMode and not self.isPaused:
-            pass
+            self.mainCharacter.isRotating = True
 
         # if save game button is clicked, call save game
         # if clicked on the map creation button, change modes
@@ -221,11 +238,13 @@ class Game(PygameGame):
             pass
 
     def mouseReleased(self, x, y):
-        self.scrolling = False
+        if self.gameMode and not self.isPaused:
+            self.scrolling = False
+            self.mainCharacter.isRotating = False
 
     def timerFired(self, dt):
-        # adjust fps as necessary
-
+        if self.isGameOver:
+            return
         # if in any of the other modes (i.e. help mode, paused, map, start),
         # then do nothing
 
@@ -235,28 +254,100 @@ class Game(PygameGame):
             if self.currMap != None:
                 for myMap in self.maps:
                     if myMap.name == self.currMap:
+                        # if reached the end of the map, game over
+                        if myMap.line[-1][0] <= self.mainCharacter.cx + 10:
+                            self.distance = self.mainCharacter.cx
+                            self.isGameOver = True
+                            if self.distance > Game.bestDistance:
+                                Game.bestDistance = self.distance  
+                            return
+
                         # find your current map
                         # move the player
-                        self.mainCharacter.cx += 1
-                        x1, y1, x2, y2 = self.findTwoPoints(myMap)
-                        self.mainCharacter.cy = y1 - self.mainCharacter.height
+                        self.mainCharacter.cx += 5
+                        self.gameScroll += 5
+
+                        # store original x to recenter when rotated
+                        x = self.mainCharacter.cx
+                        leftX, leftY, rightX, rightY = self.findLeftRightPoints(myMap)
+                        cy = self.findYAtX(leftX, leftY, rightX, rightY)
+                        x1, y2, x2, y2 = self.findImmediatePoints(myMap)
+
+                        # x1, y1, x2, y2 = self.findTwoPoints(myMap)
+                        # cx, cy = self.findClosestPointOnLine(self.mainCharacter.cx,
+                        #    self.mainCharacter.cy, x1, y1, x2, y2)
+
+                        if rightX-leftX == 0: rightX += 0.1
+                        if rightY-leftY == 0: rightY += 0.1
+
+                        if self.mainCharacter.isRotating:
+                            self.mainCharacter.rotate(self.rotateAngle)
+                            self.rotateAngle += 10
+                            self.rotateAngle %= 360
+                        else:
+                            slope = (rightY-leftY)/(rightX-leftX)
+                            slopeSign = slope/(abs(slope))
+                            absReciprocal = abs((rightX-leftX)/(rightY-leftY))
+                            angle = 180 / math.pi * math.atan(absReciprocal) - 90
+                            rotateAngle = slopeSign * angle
+                            self.mainCharacter.rotate(rotateAngle)
+
                         if self.mainCharacter.isJumping:
                             self.mainCharacter.jump()
-                            self.mainCharacter.cy += self.mainCharacter.jumpHeight
-                        if x2-x1 == 0: x2 += 1
-                        if y2-y1 == 0: y2 += 1
-                        slope = (y2-y1)/(x2-x1)
-                        slopeSign = slope/(abs(slope))
-                        angle = 180 / math.pi * math.atan(abs((x2-x1)/(y2-y1))) - 90
-                        rotateAngle = slopeSign * angle
-                        self.mainCharacter.rotate(rotateAngle)
-                        self.gameScroll += 1
+                            self.mainCharacter.cy -= self.mainCharacter.jumpHeight
+                            if self.mainCharacter.cy >= cy:
+                                self.mainCharacter.resetJump()
+                        elif abs(x2-x1) >= 25:
+                            if not self.mainCharacter.isFalling:
+                                self.mainCharacter.fallStage = 0
+                            self.mainCharacter.isFalling = True
+                            self.mainCharacter.fall()
+                            self.mainCharacter.cy -= self.mainCharacter.fallHeight
+                        else:
+                            if self.mainCharacter.cy <= cy:
+                                self.mainCharacter.isFalling = False
+                                self.fallStage = 0
+                            if not self.mainCharacter.isFalling:
+                                self.mainCharacter.cx = x
+                                self.mainCharacter.cy = cy - self.mainCharacter.height
+                            else:
+                                self.distance = self.mainCharacter.cx
+                                self.isGameOver = True
+                                if self.distance > Game.bestDistance:
+                                    Game.bestDistance = self.distance                           
+                        self.mainCharacter.update()
             # adjust speed of player
 
             # check for player collisions with line
             pass
 
         # update self.score and self.distance as playing
+
+    def findLeftRightPoints(self, myMap):
+        for i in range(len(myMap.line)):
+            currX, currY = myMap.line[i]
+            if currX > self.mainCharacter.cx:
+                for j in range(10, -1, -1):
+                    if 0 <= i+j < len(myMap.line):
+                        rightX, rightY = myMap.line[i+j]
+                        break
+                for j in range(10, -1, -1):
+                    if 0 <= i-j < len(myMap.line):
+                        leftX, leftY = myMap.line[i-j]
+                return leftX, leftY, rightX, rightY
+    
+    def findImmediatePoints(self, myMap):
+        for i in range(len(myMap.line)):
+            currX, currY = myMap.line[i]
+            if currX > self.mainCharacter.cx:
+                x2, y2 = currX, currY
+                x1, y1 = myMap.line[i-1]
+                return x1, y1, x2, y2
+                
+    def findYAtX(self, x1, y1, x2, y2):
+        m = (y2-y1)/(x2-x1)
+        b = y1 - m * x1
+        return m * (self.mainCharacter.cx+self.mainCharacter.width/2) + b
 
     def findTwoPoints(self, myMap):
         characterPoint = self.mainCharacter.cx, self.mainCharacter.cy
@@ -268,11 +359,23 @@ class Game(PygameGame):
                 closestPoint = point
                 closestIndex = i
         x1, y1 = closestPoint
-        if i + 1 < len(myMap.line):
-            x2, y2 = myMap.line[i+1]
+        if i + 5 < len(myMap.line):
+            x2, y2 = myMap.line[i+5]
         else:
-            x2, y2 = myMap.line[i-1]
+            x2, y2 = myMap.line[i-5]
         return x1, y1, x2, y2
+    
+    def findClosestPointOnLine(self, x0, y0, x1, y1, x2, y2):
+        a = y2 - y1
+        b = x1 - x2
+        c1 = a * x1 + b * y1
+        c2 = -b * x0 + a * y0
+        d = a**2 + b**2
+        if d == 0:
+            return x0, y0
+        cx = (a * c1 - b * c2)/d
+        cy = (a * c2 + b * c1)/d
+        return cx, cy
 
     def calDistance(self, point1, point2):
         x1, y1 = point1
@@ -290,21 +393,31 @@ class Game(PygameGame):
             self.drawMapList(screen)
         elif self.startScreenMode:
             self.drawStartScreen(screen)
+        elif self.isGameOver:
+            self.drawGameOver(screen)
 
         # otherwise, in game mode
         # draw game (foreground, background, terrain, weather, day)
         elif self.gameMode:
             screen.fill((194,245,255))
             self.trees.draw(screen)
-            screen.blit(self.mainCharacter.image, (self.mainCharacter.cx-self.gameScroll, self.mainCharacter.cy))
-            for myMap in self.maps:
-                if myMap.name == self.currMap:
-                    myMap.draw(screen, self.gameScroll, self)
-                    # if self.mainCharacter.cx > myMap.line[-1][0] - self.width:
-                    #    myMap.extend()
-            for tree in self.trees:
-                tree.fixX(self.gameScroll)
-                tree.update()
+            if self.currMap == None:
+                screen.fill((255,255,255))
+                myfont = pygame.font.Font('Seaside.ttf', 25)
+                line1 = myfont.render('NO MAP SELECTED; PRESS R', False, (0, 0, 0))
+                line2 = myfont.render('GO TO THE MAPS PAGE TO CHOOSE/CREATE A MAP', False, (0, 0, 0))
+                screen.blit(line1,(100, 150))
+                screen.blit(line2,(100, 350))
+            else:
+                screen.blit(self.mainCharacter.image, (self.mainCharacter.cx-self.gameScroll, self.mainCharacter.cy))
+                for myMap in self.maps:
+                    if myMap.name == self.currMap:
+                        myMap.draw(screen, self.gameScroll, self, True)
+                        # if self.mainCharacter.cx > myMap.line[-1][0] - self.width:
+                        #    myMap.extend()
+                for tree in self.trees:
+                    tree.fixX(self.gameScroll)
+                    tree.update()
 
     def drawHelpScreen(self, screen):
         screen.fill((255,255,255))
@@ -323,7 +436,7 @@ class Game(PygameGame):
         self.mapCreationButtons.draw(screen)
         self.drawButtonText(self.mapCreationButtons, screen)
         if len(Game.maps) > 0:
-            Game.maps[-1].draw(screen, self.mapScroll, self)
+            Game.maps[-1].draw(screen, self.mapScroll, self, False)
         if self.recordName:
             myfont = pygame.font.Font('Seaside.ttf', 30)
             line1 = myfont.render('Please enter a name for the map:', False, (48, 73, 12))
@@ -344,13 +457,26 @@ class Game(PygameGame):
         self.startScreenButtons.draw(screen)
         self.drawButtonText(self.startScreenButtons, screen)
     
+    def drawGameOver(self, screen):
+        screen.fill((255,255,255))
+        myfont = pygame.font.Font('Seaside.ttf', 30)
+        line1 = myfont.render('GAME OVER', False, (48, 73, 12))
+        line2 = myfont.render('PRESS R TO RESTART', False, (48, 73, 12))
+        distance = 'DISTANCE: ' + str(self.distance)
+        line3 = myfont.render(distance, False, (48, 73, 12))
+        bestDistance=  'BEST DISTANCE: ' + str(Game.bestDistance)
+        line4 = myfont.render(bestDistance, False, (48, 73, 12))
+        screen.blit(line1,(100, 150))
+        screen.blit(line2,(100, 250))
+        screen.blit(line3,(100, 350))
+        screen.blit(line4,(100, 450))
+    
     def drawButtonText(self, buttonList, screen):
         for button in buttonList:
             myfont = pygame.font.Font('Antonio-Regular.ttf', 18)
             text = myfont.render(button.text, False, (0, 0, 0))
             screen.blit(text, (button.cx-button.width/4, button.cy-button.height/4))
         
-
     # code based from 
     # https://inventwithpython.com/blog/2012/05/03/implement-a-save-game-feature-in-python-with-the-shelve-module/
     def saveGame(self):

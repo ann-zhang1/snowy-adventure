@@ -5,6 +5,7 @@ from GameObject import GameObject
 class Button(GameObject):
     @staticmethod
     def init():
+        # image from hiclipart.com
         image = pygame.image.load('greyButton.png').convert_alpha()
         width, height = image.get_size()
         Button.baseImage = pygame.transform.scale(image, (int(width/10), int(height/10)))
