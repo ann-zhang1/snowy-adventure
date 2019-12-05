@@ -1,6 +1,7 @@
 from GameObject import GameObject
 import pygame
 import copy
+import math
 
 class MainCharacter(GameObject):
     @staticmethod
@@ -10,37 +11,50 @@ class MainCharacter(GameObject):
         width, height = image.get_size()
         MainCharacter.baseImage = pygame.transform.scale(image, (int(width/10), int(height/10)))
 
-    def __init__(self, cx, cy):
+    def __init__(self, cx, cy, game):
         image = copy.copy(MainCharacter.baseImage)
         super().__init__(cx, cy, image)
         self.cx += self.width/2
         self.cy += self.height
+        self.game = game
+        self.jumpPower = 20
         self.reset()
     
     def reset(self):
-        self.isJumping = False
-        self.jumpHeight = 0
-        self.jumpStage = 15
-
-        self.isFalling = False
+        self.canRotate = False
         self.isRotating = False
-        self.fallStage = 0
+
+        self.velX = 15
+        self.velY = 0
+        self.canJump = True
 
     def jump(self):
-        sign = 1
-        if self.jumpStage < 0:
-            sign = -1
-        self.jumpHeight = sign * 0.1*(self.jumpStage)**2
-        self.jumpStage -= 1
+        thetaRadians = self.game.theta * math.pi / 180
+        yJump = math.sin(math.pi/2 - thetaRadians)
+        xJump = math.cos(math.pi/2 - thetaRadians)
+        yChange = yJump * self.jumpPower
+        xChange = xJump * self.jumpPower
+        ySign = 1 if yChange >= 0 else -1
+        xSign = 1 if xChange >= 0 else -1
+        scaleY = ySign * abs(yChange * 2 ** 0.5)
+        self.velX -= min(xSign * abs(xChange * 8) ** 0.5, 15)
+        self.velY = -1 * (abs(yChange * 4) ** 0.5)
+        print(self.velX)
+    
+    '''
+    if False:
+        if abs(xSign * (abs(xChange * 64) ** 0.5) > 15):
+            self.velX = xSign * (abs(xChange * 64) ** 0.5)
+        else:
+            if xSign == 1:
+                self.velX -= 5
+            else: self.velX = 15
+    else:
+    '''
     
     def fall(self):
-        self.fallHeight = -1 * 0.1*(self.fallStage)**2
-        self.fallStage -= 1
-
-    def resetJump(self):
-        self.jumpHeight = 0
-        self.jumpStage = 15
-        self.isJumping = False
+        self.velY += self.game.g
+        self.velX -= 0.1 * (abs(self.velX)) ** 0.3
 
     def update(self):
         self.updateRect()

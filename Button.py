@@ -8,7 +8,7 @@ class Button(GameObject):
         # image from hiclipart.com
         image = pygame.image.load('greyButton.png').convert_alpha()
         width, height = image.get_size()
-        Button.baseImage = pygame.transform.scale(image, (int(width/10), int(height/10)))
+        Button.baseImage = pygame.transform.scale(image, (int(width/7), int(height/7)))
     
     def __init__(self, cx, cy, text):
         image = copy.copy(Button.baseImage)

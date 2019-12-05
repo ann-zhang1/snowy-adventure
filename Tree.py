@@ -15,9 +15,13 @@ class Tree(GameObject):
         super().__init__(cx, cy, image)
         self.originalX = cx
         self.cy -= self.height/2
+        self.originalY = self.cy
     
     def fixX(self, scroll):
         self.cx = self.originalX - scroll
+    
+    def fixY(self, scroll):
+        self.cy = self.originalY - scroll
     
     def update(self):
         self.updateRect()

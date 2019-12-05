@@ -45,7 +45,7 @@ class PygameGame(object):
     def redrawAll(self, screen):
         pass
 
-    def __init__(self, width=1000, height=600, fps=50, title="Ski Adventure"):
+    def __init__(self, width=1000, height=600, fps=40, title="Ski Adventure"):
         self.width = width
         self.height = height
         self.fps = fps
